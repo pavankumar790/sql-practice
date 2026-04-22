@@ -1,0 +1,56 @@
+WITH a AS (
+    -- Step 1: Count number of visits per person per floor
+    SELECT 
+        name, 
+        floor, 
+        COUNT(*) AS ct
+    FROM entries
+    GROUP BY 
+        name, floor
+),
+
+b AS (
+    -- Step 2: 
+    -- 1. Rank floors per person based on visit count (highest first)
+    -- 2. Calculate total visits per person
+    SELECT 
+        *,
+        DENSE_RANK() OVER (
+            PARTITION BY name 
+            ORDER BY ct DESC
+        ) AS r,
+        SUM(ct) OVER (
+            PARTITION BY name
+        ) AS total_visit
+    FROM a
+),
+
+c AS (
+    -- Step 3: Keep only the most visited floor(s) per person
+    -- (DENSE_RANK = 1 ensures ties are included)
+    SELECT 
+        name, 
+        floor, 
+        total_visit
+    FROM b
+    WHERE r = 1
+),
+
+d AS (
+    -- Step 4: Get all unique resources used by each person
+    SELECT 
+        name, 
+        STRING_AGG(DISTINCT resources, ',') AS resources_used
+    FROM entries
+    GROUP BY name
+)
+
+-- Final Step: Combine results
+SELECT 
+    c.name, 
+    c.floor AS most_visited_floor, 
+    c.total_visit AS total_visits, 
+    d.resources_used
+FROM c
+LEFT JOIN d
+    ON c.name = d.name;
